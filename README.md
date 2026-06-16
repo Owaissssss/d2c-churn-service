@@ -1,5 +1,11 @@
 # D2C Customer Churn Intelligence — Part 4: Live FastAPI Production Scoring Service
 
+## Student & Course Information
+* **Student Name:** Mohammad Owais
+* **Registration Number:** iitp_aiml_2506198
+* **Email:** zkzonfamily@gmail.com
+* **Course:** IIT Patna AI/ML Course Capstone
+
 This repository houses **Part 4** of the Capstone project, establishing a production-grade FastAPI microservice that wraps our optimized Random Forest Classifier to serve real-time e-commerce inference requests.
 
 ## Microservice Architecture Layout
