@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
+from typing import List
 
 # Initialize application
 app = FastAPI(
@@ -66,48 +67,68 @@ class CustomerFeatures(BaseModel):
 
 
 @app.get("/")
+@app.get("/health")
 def health_check():
     """Operational gateway route verifying that the API service is healthy and online."""
     return {
-        "status": "ONLINE",
+        "status": "ok",
         "service": "D2C Churn Scoring Engine",
         "calibrated_threshold": 0.40
     }
 
 
-@app.post("/predict")
-def predict_churn(payload: CustomerFeatures):
-    """
-    Live prediction endpoint that dynamically formats incoming variables
-    to match the exact schema signature required by the Random Forest model.
-    """
-    try:
-        # Create a single row dictionary from input data
-        raw_input = payload.model_dump()
+def process_predictions(input_data_list: List[dict]) -> List[dict]:
+    """Helper pipeline to run the tabular formatting, encoding, and thresholding steps."""
+    # Convert list of JSON objects directly into a structured DataFrame
+    temp_df = pd.DataFrame(input_data_list)
 
-        # Convert JSON structure to a temporary single-row DataFrame DataFrame
-        temp_df = pd.DataFrame([raw_input])
+    # Apply dummy encoding
+    temp_df_encoded = pd.get_dummies(temp_df, columns=cat_cols)
 
-        # Apply the exact same dummy encoding sequence used during matrix training
-        temp_df_encoded = pd.get_dummies(temp_df, columns=cat_cols)
+    # Re-index to ensure alignment with the matrix model weight signatures
+    final_features_df = temp_df_encoded.reindex(columns=MODEL_COLUMN_SIGNATURE, fill_value=0)
 
-        # Re-index columns dynamically using our MODEL_COLUMN_SIGNATURE.
-        # This adds any missing dummy columns as 0 automatically, eliminating misalignment errors!
-        final_features_df = temp_df_encoded.reindex(columns=MODEL_COLUMN_SIGNATURE, fill_value=0)
+    # Calculate probabilities
+    raw_probabilities = model.predict_proba(final_features_df)[:, 1]
 
-        # Execute the model scoring
-        raw_probabilities = model.predict_proba(final_features_df)[:, 1]
-        churn_risk_score = float(raw_probabilities[0])
+    results = []
+    calibrated_threshold = 0.40
 
-        # Apply the optimized decision boundary threshold
-        calibrated_threshold = 0.40
+    for prob in raw_probabilities:
+        churn_risk_score = float(prob)
         final_prediction = 1 if churn_risk_score >= calibrated_threshold else 0
 
-        return {
+        # Build risk explanations based on typical risk behavior flags
+        explanation = "Standard behavior patterns."
+        if churn_risk_score >= calibrated_threshold:
+            explanation = "Elevated risk factors detected due to systemic behavior metrics or customer care friction."
+
+        results.append({
             "churn_probability": round(churn_risk_score, 4),
             "predicted_class": final_prediction,
-            "threshold_applied": calibrated_threshold,
-            "marketing_action": "TRIGGER_PROACTIVE_RETENTION_SAVE" if final_prediction == 1 else "MAINTAIN_STANDARD_NURTURE"
-        }
+            "risk_level": "high" if final_prediction == 1 else "low",
+            "risk_explanation": explanation
+        })
+    return results
+
+
+@app.post("/predict")
+def predict_churn(payload: CustomerFeatures):
+    """Live single-record prediction inference endpoint mapping parameters straight to pipeline structures."""
+    try:
+        raw_input = payload.model_dump()
+        prediction_output = process_predictions([raw_input])[0]
+        return prediction_output
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error executing model pipeline scoring: {str(e)}")
+
+
+@app.post("/batch_predict")
+def batch_predict_churn(payload: List[CustomerFeatures]):
+    """Live batch array prediction endpoint processing bulk matrices records seamlessly."""
+    try:
+        raw_inputs = [item.model_dump() for item in payload]
+        batch_outputs = process_predictions(raw_inputs)
+        return {"predictions": batch_outputs}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error executing batch scoring pipeline: {str(e)}")
