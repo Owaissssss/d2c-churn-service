@@ -14,7 +14,7 @@ This repository houses **Part 4** of the Capstone project, establishing a produc
 * `test_pipeline.py`: Automated verification framework spawning background local servers, sending programmatic requests, and evaluating inference signatures.
 * `model.pkl`: Serialized, pre-compiled advanced machine learning classifier weight parameters.
 * `rfm_modeling_snapshot.csv`: Historical data tracking schema properties utilized for live dummy dimension formatting.
-
+* `monitoring_plan.md`: Comprehensive strategy mapping post-deployment tracking metrics (data drift, prediction stability, and system errors) along with the operational responsible-use framework.
 ## API Endpoint Specifications
 
 ### 1. Health Gateway Check
